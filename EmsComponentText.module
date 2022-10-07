@@ -1,0 +1,106 @@
+<?php namespace ProcessWire;
+class EmsComponentText extends WireData implements Module {
+    public static function getModuleInfo() {
+        return [
+            'title' => 'Ems Component Text',
+            'summary' => 'enoja Management System Component Text',
+            'version' => 1,
+            'requires' => array(
+                'EmsBasic>=1'
+            )
+        ];
+    }
+    public function ___install() {
+        //require __DIR__ . '/install/Resources.php';
+        $fields      = $this->wire('fields');
+        $templates   = $this->wire('templates');
+        $fieldgroups = $this->wire('fieldgroups');
+        $config      = $this->wire('config');
+        $modules     = $this->wire('modules');
+
+        $fieldTitle = $fields->get('title');
+        $fieldWrapper = $fields->get('wrapper');
+
+		if(!$fields->get('headline')) {
+			$headline = new Field;
+			$headline->type = $this->modules->get('FieldtypeText');
+			$headline->name = "headline";
+			$headline->label = "headline";
+			$headline->save();
+            $this->message('Field created: headline');
+		}
+
+        if(!$templates->get('component-text')) {
+            if (!$fieldgroups->get("component-text")) {
+                $fieldgroup = new Fieldgroup();
+                $fieldgroup->name = "component-text";
+                $fieldgroup->add($fieldTitle); // add some fields
+                $fieldgroup->add($fieldWrapper);
+                
+                $fieldgroup->save();
+            } else {
+                $fieldgroup = $fieldgroups->get("component-text");
+            }
+
+            $componenttext = new Template;
+            $componenttext->name = "component-text";
+            $componenttext->fieldgroup = $fieldgroup;
+            $componenttext->addTag("component");
+            $componenttext->noChildren = 1;
+            $componenttext->save();
+
+            $emsbasic = $modules->get('EmsBasic');
+            Foreach ($emsbasic as $addt) {
+                $addt->childTemplates($componenttext);
+                $addt = $componenttext->parentTemplates($emsbasic);
+
+                $addt->save();
+            }
+            
+            $componenttext->parentTemplates($templates->find("tags=page"));
+            $componenttext->save();
+            
+            $this->message('Template created: component-text');
+        }
+
+        $modulePath = $config->paths->siteModules . 'EmsBasic/';
+
+        // Copy all templates to templates Folder
+        copy($modulePath.'template/component-text.php', $config->paths->templates.'component-text.php');
+    }
+
+    public function ___uninstall() {
+        $fields      = $this->wire('fields');
+        $fieldgroups = $this->wire('fieldgroups');
+        $templates   = $this->wire('templates');
+        $config      = $this->wire('config');
+        $pages       = $this->wire('pages');
+
+		// find and delete the page we installed, locating it by the process field (which has the module ID)
+		// it would probably be sufficient just to locate by name, but this is just to be extra sure.
+
+        foreach($pages->get(1)->children("template=component-text") as $p) {
+            $this->message('Deleted Page: '.$p->title);
+            $p->delete(true);
+        }
+
+        /* Next we find the templates we installed */
+        foreach ($templates->find("name=component-text") as $t) {
+            $title = $t->name;
+            $templates->delete($t);
+            $fieldgroups->delete($t->fieldgroup);
+            $this->message('Deleted Template: '.$title);
+        }
+
+        if ($fields->get("headline")) {
+            /* Remove all fields form page-basic and page-home */
+            $headline = $fields->get("headline");
+
+            /* Delete the Fields */
+            $fields->delete($headline);
+
+            $this->message("Deleted Fields 'headline'");
+        }
+        unlink($config->paths->templates.'component-text.php');
+    }
+}
